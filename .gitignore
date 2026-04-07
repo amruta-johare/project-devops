@@ -14,7 +14,8 @@ target/
 
 # Frontend (React)
 node_modules/
-build/
+dist/
+.git
 
 # Env files
 .env
