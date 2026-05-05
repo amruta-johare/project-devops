@@ -2,7 +2,7 @@ import axios from 'axios'
 
 // Base URL is empty — Vite proxy forwards /pg, /auth etc. to localhost:8080
 const api = axios.create({
-  baseURL: '',
+  baseURL: "http://localhost:8080",
 })
 
 // Automatically attach the JWT token to every request

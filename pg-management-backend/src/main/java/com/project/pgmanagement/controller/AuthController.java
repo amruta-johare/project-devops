@@ -5,6 +5,9 @@ import com.project.pgmanagement.dto.SignupRequest;
 import com.project.pgmanagement.entity.User;
 import com.project.pgmanagement.service.AuthService;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.CrossOrigin;
+
+@CrossOrigin(origins = "http://localhost:3000")
 
 @RestController
 @RequestMapping("/auth")
