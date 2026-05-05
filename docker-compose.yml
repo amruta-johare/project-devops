@@ -1,0 +1,144 @@
+# services:
+
+#   db:
+#     image: mysql:8
+#     container_name: pg-mysql
+#     restart: always
+#     environment:
+#       MYSQL_DATABASE: pg_management
+#       MYSQL_ROOT_PASSWORD: root
+#       MYSQL_USER: user
+#       MYSQL_PASSWORD: password
+#     ports:
+#       - "3307:3306"
+#     volumes:
+#       - mysql-data:/var/lib/mysql
+#     healthcheck:
+#       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+
+#   backend:
+#     build: ./pg-management-backend
+#     container_name: pg-backend
+#     ports:
+#       - "8080:8080"
+#     depends_on:
+#       db:
+#         condition: service_healthy
+#     environment:
+#       SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/pg_management
+#       SPRING_DATASOURCE_USERNAME: user
+#       SPRING_DATASOURCE_PASSWORD: password
+
+#   frontend:
+#     build: ./pg-management-frontend
+#     container_name: pg-frontend
+#     ports:
+#       - "3000:80"
+#     depends_on:
+#       - backend
+
+# volumes:
+#   mysql-data:
+
+name: pg-devops-pipeline
+
+services:
+
+  db:
+    image: mysql:8
+    container_name: pg-mysql
+    restart: always
+    environment:
+      MYSQL_DATABASE: pg_management
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: user
+      MYSQL_PASSWORD: password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pg-network
+
+  backend:
+    build:
+      context: ./pg-management-backend
+      dockerfile: Dockerfile
+    container_name: pg-backend
+    ports:
+      - "8080:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:mysql://db:3306/pg_management
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: password
+    networks:
+      - pg-network
+    restart: on-failure:5
+
+  frontend:
+    build:
+      context: ./pg-management-frontend
+      dockerfile: Dockerfile
+    container_name: pg-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+    networks:
+      - pg-network
+    restart: on-failure:5
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - pg-network
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+    networks:
+      - pg-network
+    depends_on:
+      - prometheus
+
+volumes:
+  mysql-data:
+    name: pg-devops-pipeline_mysql-data
+  prometheus-data:
+    name: pg-devops-pipeline_prometheus-data
+  grafana-data:
+    name: pg-devops-pipeline_grafana-data
+
+networks:
+  pg-network:
+    name: pg-devops-network
+    driver: bridge

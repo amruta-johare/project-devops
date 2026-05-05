@@ -1,0 +1,26 @@
+FROM jenkins/jenkins:lts-jdk21
+
+USER root
+
+# Docker CLI so the pipeline can build images on the host's daemon
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends docker.io curl jq && \
+    rm -rf /var/lib/apt/lists/*
+
+# Allow jenkins user to use docker socket
+RUN groupmod -g 999 docker || true && \
+    usermod -aG docker jenkins || true
+
+# Skip the setup wizard – JCasC handles bootstrap
+ENV JAVA_OPTS="-Djenkins.install.runSetupWizard=false"
+ENV CASC_JENKINS_CONFIG=/var/jenkins_home/casc.yaml
+
+USER jenkins
+
+# Bake plugins
+COPY jenkins/plugins.txt /usr/share/jenkins/ref/plugins.txt
+RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
+
+# JCasC config baked into image (also overlayable via /var/jenkins_home/casc.yaml mount)
+COPY jenkins/casc.yaml /usr/share/jenkins/ref/casc.yaml
+COPY jenkins/init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/

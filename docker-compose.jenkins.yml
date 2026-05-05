@@ -1,0 +1,90 @@
+# Jenkins + SonarQube + Postgres stack (separate from the app stack).
+# Run: docker compose -f docker-compose.jenkins.yml up -d --build
+
+name: pg-devops-cicd
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: sonarqube-db
+    environment:
+      POSTGRES_DB: sonarqube
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: sonarPassword123
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - jenkins-network
+
+  sonarqube:
+    image: sonarqube:10.6-community
+    container_name: sonarqube
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://postgres:5432/sonarqube
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonarPassword123
+      SONAR_ES_BOOTSTRAP_CHECKS_DISABLED: "true"
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - jenkins-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9000/api/system/status | grep -q '\"status\":\"UP\"'"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 90s
+
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile.jenkins
+    container_name: jenkins
+    user: root
+    privileged: true
+    ports:
+      - "8081:8080"
+      - "50000:50000"
+    environment:
+      # JCasC picks these up from env (see jenkins/casc.yaml)
+      JENKINS_ADMIN_PASSWORD: "${JENKINS_ADMIN_PASSWORD:-admin}"
+      SONARQUBE_TOKEN: "${SONARQUBE_TOKEN:-placeholder}"
+      CASC_JENKINS_CONFIG: /var/jenkins_home/casc.yaml
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Dcasc.reload.token=reload"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      # JCasC config: live-mounted so we can re-apply without rebuild
+      - ./jenkins/casc.yaml:/var/jenkins_home/casc.yaml:ro
+      # Mount the project as a "local git remote" the seed job clones from
+      - .:/workspace/project-devops:ro
+    networks:
+      - jenkins-network
+    depends_on:
+      sonarqube:
+        condition: service_started
+
+volumes:
+  postgres-data:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:
+  jenkins-data:
+
+networks:
+  jenkins-network:
+    driver: bridge

@@ -1,0 +1,103 @@
+jenkins:
+  systemMessage: "PG Management DevOps – Jenkins (auto-configured via JCasC)"
+  numExecutors: 2
+  mode: NORMAL
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "admin"
+          password: "${JENKINS_ADMIN_PASSWORD:-admin}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  remotingSecurity:
+    enabled: true
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - string:
+              scope: GLOBAL
+              id: "sonarqube-token"
+              description: "SonarQube global analysis token"
+              secret: "${SONARQUBE_TOKEN:-placeholder}"
+
+unclassified:
+  sonarGlobalConfiguration:
+    buildWrapperEnabled: true
+    installations:
+      - name: "SonarQube"
+        serverUrl: "http://sonarqube:9000"
+        credentialsId: "sonarqube-token"
+        triggers:
+          skipScmCause: false
+          skipUpstreamCause: false
+
+  location:
+    url: "http://jenkins:8080/"
+    adminAddress: "admin@local"
+
+jobs:
+  - script: |
+      pipelineJob('pg-management-sonar') {
+        description('Build backend and run SonarQube analysis on the locally mounted source tree.')
+        definition {
+          cps {
+            sandbox(true)
+            script("""
+              pipeline {
+                agent any
+                options { timeout(time: 30, unit: 'MINUTES'); timestamps() }
+                stages {
+                  stage('Sync source from /workspace') {
+                    steps {
+                      sh '''
+                        rm -rf source && mkdir -p source
+                        cp -r /workspace/project-devops/pg-management-backend ./source/
+                        ls -la source/pg-management-backend
+                      '''
+                    }
+                  }
+                  stage('Compile') {
+                    steps {
+                      dir('source/pg-management-backend') {
+                        sh 'chmod +x mvnw && ./mvnw -B clean compile -DskipTests'
+                      }
+                    }
+                  }
+                  stage('SonarQube Analysis') {
+                    steps {
+                      withSonarQubeEnv('SonarQube') {
+                        dir('source/pg-management-backend') {
+                          sh '''
+                            ./mvnw -B sonar:sonar \\
+                              -Dsonar.projectKey=pg-management-backend \\
+                              -Dsonar.projectName="PG Management Backend" \\
+                              -Dsonar.sources=src/main/java \\
+                              -Dsonar.java.binaries=target/classes \\
+                              -Dsonar.java.source=21 \\
+                              -Dsonar.exclusions=**/target/**,**/*.sql,**/Dockerfile
+                          '''
+                        }
+                      }
+                    }
+                  }
+                  stage('Quality Gate') {
+                    steps {
+                      timeout(time: 5, unit: 'MINUTES') {
+                        waitForQualityGate abortPipeline: false
+                      }
+                    }
+                  }
+                }
+                post {
+                  success { echo '✓ Sonar analysis done -> http://localhost:9000/dashboard?id=pg-management-backend' }
+                  always  { cleanWs(deleteDirs: true, notFailBuild: true) }
+                }
+              }
+            """.stripIndent())
+          }
+        }
+      }

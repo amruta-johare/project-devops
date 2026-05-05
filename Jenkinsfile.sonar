@@ -1,0 +1,66 @@
+// Lean pipeline focused on SonarQube analysis only.
+// Does NOT touch the running pg-devops-pipeline stack.
+pipeline {
+    agent any
+
+    environment {
+        SONARQUBE_SERVER = 'SonarQube'
+        SONARQUBE_PROJECT_KEY = 'pg-management-backend'
+        SONARQUBE_PROJECT_NAME = 'PG Management Backend'
+    }
+
+    options {
+        timeout(time: 30, unit: 'MINUTES')
+        timestamps()
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+    }
+
+    stages {
+        stage('Compile') {
+            steps {
+                dir('pg-management-backend') {
+                    sh '''
+                        chmod +x mvnw
+                        ./mvnw -B clean compile -DskipTests
+                    '''
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_SERVER}") {
+                    dir('pg-management-backend') {
+                        sh '''
+                            chmod +x mvnw
+                            ./mvnw -B sonar:sonar \
+                                -Dsonar.projectKey=${SONARQUBE_PROJECT_KEY} \
+                                -Dsonar.projectName="${SONARQUBE_PROJECT_NAME}" \
+                                -Dsonar.sources=src/main/java \
+                                -Dsonar.java.binaries=target/classes \
+                                -Dsonar.java.source=21 \
+                                -Dsonar.exclusions=**/target/**,**/*.sql,**/Dockerfile
+                        '''
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: false
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs(deleteDirs: true, notFailBuild: true)
+        }
+        success {
+            echo "✓ SonarQube analysis finished – open http://localhost:9000/dashboard?id=pg-management-backend"
+        }
+    }
+}
