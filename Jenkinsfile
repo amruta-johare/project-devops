@@ -8,7 +8,7 @@ pipeline {
         
         // SonarQube Configuration
         SONARQUBE_SERVER = 'SonarQube'
-        SONARQUBE_PROJECT_KEY = 'pg-devops-pipeline'
+        SONARQUBE_PROJECT_KEY = 'pg-management-backend'
         SONARQUBE_PROJECT_NAME = 'PG Management DevOps Pipeline'
         
         // Docker Configuration
@@ -22,10 +22,6 @@ pipeline {
         timeout(time: 1, unit: 'HOURS')
         buildDiscarder(logRotator(numToKeepStr: '10'))
         timestamps()
-    }
-
-    triggers {
-        githubPush()
     }
 
     stages {
@@ -97,12 +93,10 @@ pipeline {
                 echo '========== Building Docker Images =========='
                 sh '''
                     echo "Building backend Docker image..."
-                    docker build -t ${DOCKER_IMAGE_BACKEND}:${DOCKER_TAG} ./pg-management-backend
-                    docker tag ${DOCKER_IMAGE_BACKEND}:${DOCKER_TAG} ${DOCKER_IMAGE_BACKEND}:latest
+                    docker build -t ${DOCKER_IMAGE_BACKEND} ./pg-management-backend
                     
                     echo "Building frontend Docker image..."
-                    docker build -t ${DOCKER_IMAGE_FRONTEND}:${DOCKER_TAG} ./pg-management-frontend
-                    docker tag ${DOCKER_IMAGE_FRONTEND}:${DOCKER_TAG} ${DOCKER_IMAGE_FRONTEND}:latest
+                    docker build -t ${DOCKER_IMAGE_FRONTEND} ./pg-management-frontend
                 '''
                 echo '✓ Docker images built successfully'
             }
