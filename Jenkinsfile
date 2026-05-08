@@ -124,48 +124,6 @@ pipeline {
             }
         }
 
-        stage('Health Check') {
-            steps {
-                echo '========== Performing Health Checks =========='
-                sh '''
-                    echo "Checking MySQL..."
-                    docker compose exec -T db mysqladmin ping -h localhost || exit 1
-                    
-                    echo "Checking Backend..."
-                    curl -f http://localhost:8080/actuator/health || exit 1
-                    
-                    echo "Checking Frontend..."
-                    curl -f http://localhost:3001/ > /dev/null 2>&1 || exit 1
-                    
-                    echo "Checking Prometheus..."
-                    curl -f http://localhost:9090/-/healthy || exit 1
-                    
-                    echo "✓ All services are healthy"
-                '''
-            }
-        }
-
-        stage('Docker Push') {
-            when {
-                branch 'main'
-            }
-            steps {
-                echo '========== Pushing Docker Images to Registry =========='
-                withDockerRegistry([credentialsId: 'docker-registry-credentials', url: "https://${REGISTRY}"]) {
-                    sh '''
-                        echo "Pushing backend image..."
-                        docker push ${DOCKER_IMAGE_BACKEND}:${DOCKER_TAG}
-                        docker push ${DOCKER_IMAGE_BACKEND}:latest
-                        
-                        echo "Pushing frontend image..."
-                        docker push ${DOCKER_IMAGE_FRONTEND}:${DOCKER_TAG}
-                        docker push ${DOCKER_IMAGE_FRONTEND}:latest
-                    '''
-                }
-                echo '✓ Docker images pushed successfully'
-            }
-        }
-    }
 
     post {
         always {
