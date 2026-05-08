@@ -1,13 +1,9 @@
 FROM prom/prometheus:latest
 
-# Create required directories
 RUN mkdir -p /etc/prometheus /prometheus
 
-# Copy Prometheus config into image
 COPY prometheus.yml /etc/prometheus/prometheus.yml
 
-# Expose Prometheus port
 EXPOSE 9090
 
-# Default startup command
-CMD ["--config.file=/etc/prometheus/prometheus.yml",  "--storage.tsdb.path=/prometheus"]
+CMD ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
